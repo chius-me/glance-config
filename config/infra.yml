@@ -1,0 +1,323 @@
+- name: infra
+  columns:
+    # ---------------- Left: Narrow Column ----------------
+    - size: small
+      widgets:
+        - type: clock
+          hour-format: 24h
+          timezone: Asia/Shanghai
+
+        - type: bookmarks
+          groups:
+            - title: server
+              links:
+                - title: openwrt
+                  url: https://192.0.2.1/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/openwrt.svg
+                - title: truenas
+                  url: https://192.0.2.2/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/truenas.svg
+                - title: proxmox
+                  url: https://192.0.2.3:8006/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/proxmox.svg
+
+            - title: vpn
+              links:
+                - title: tailscale
+                  url: https://login.tailscale.com/admin/machines
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/tailscale.svg
+                - title: netbird
+                  url: https://vpn.example.com
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/netbird.svg
+
+        # ---- Tailscale Devices ----
+        - type: custom-api
+          title: Tailscale
+          title-url: https://login.tailscale.com/admin/machines
+          url: https://api.tailscale.com/api/v2/tailnet/-/devices
+          headers:
+            Authorization: Bearer ${TAILSCALE_API_KEY}
+          cache: 10m
+          template: |
+            <style>
+              .ts-container { position: relative; overflow: hidden; height: 1.5em; }
+              .ts-info { display: flex; transition: transform 0.2s ease, opacity 0.2s ease; }
+              .ts-ip { position: absolute; top: 0; left: 0; transform: translateY(-100%); opacity: 0; transition: transform 0.2s ease, opacity 0.2s ease; }
+              .ts-container:hover .ts-info { transform: translateY(100%); opacity: 0; }
+              .ts-container:hover .ts-ip { transform: translateY(0); opacity: 1; }
+              .ts-update { width: 8px; height: 8px; border-radius: 50%; background-color: var(--color-primary); display: inline-block; margin-left: 4px; margin-right: 4px; vertical-align: middle; }
+              .ts-offline { width: 8px; height: 8px; border-radius: 50%; background-color: var(--color-negative); display: inline-block; margin-left: 4px; vertical-align: middle; }
+            </style>
+            <ul class="list list-gap-10 collapsible-container" data-collapse-after="3">
+              {{ range .JSON.Array "devices" }}
+              <li>
+                <div class="flex items-center gap-10">
+                  <div class="grow">
+                    <span class="size-h4 text-truncate color-primary">{{ findMatch "^([^.]+)" (.String "name") }}</span>
+                    {{ if .Bool "updateAvailable" }}<span class="ts-update" data-popover-type="text" data-popover-text="Update Available"></span>{{ end }}
+                  </div>
+                </div>
+                <div class="ts-container">
+                  <ul class="list-horizontal-text ts-info">
+                    <li>{{ .String "os" }}</li>
+                    <li>{{ .String "user" }}</li>
+                  </ul>
+                  <div class="ts-ip">{{ .String "addresses.0" }}</div>
+                </div>
+              </li>
+              {{ end }}
+            </ul>
+
+        # ---- Netbird Devices ----
+        - type: custom-api
+          title: Netbird
+          title-url: https://vpn.example.com
+          url: https://vpn.example.com/api/peers
+          headers:
+            Accept: application/json
+            Authorization: Token ${NETBIRD_API_KEY}
+          cache: 10m
+          template: |
+            <style>
+              .nb-container { position: relative; overflow: hidden; height: 1.5em; }
+              .nb-info { display: flex; transition: transform 0.2s ease, opacity 0.2s ease; }
+              .nb-ip { position: absolute; top: 0; left: 0; transform: translateY(-100%); opacity: 0; transition: transform 0.2s ease, opacity 0.2s ease; }
+              .nb-container:hover .nb-info { transform: translateY(100%); opacity: 0; }
+              .nb-container:hover .nb-ip { transform: translateY(0); opacity: 1; }
+              .nb-online { width: 8px; height: 8px; border-radius: 50%; background-color: var(--color-positive); display: inline-block; margin-left: 4px; vertical-align: middle; }
+              .nb-offline { width: 8px; height: 8px; border-radius: 50%; background-color: var(--color-negative); display: inline-block; margin-left: 4px; vertical-align: middle; }
+            </style>
+            <ul class="list list-gap-10 collapsible-container" data-collapse-after="4">
+              {{ range .JSON.Array "" }}
+              <li>
+                <div class="flex items-center gap-10">
+                  <div class="grow">
+                    <span class="size-h4 text-truncate color-primary">{{ .String "hostname" }}</span>
+                    {{ if .Bool "connected" }}<span class="nb-online"></span>{{ else }}<span class="nb-offline"></span>{{ end }}
+                  </div>
+                </div>
+                <div class="nb-container">
+                  <ul class="list-horizontal-text nb-info">
+                    <li>{{ .String "os" }}</li>
+                    <li>{{ .String "city_name" }}, {{ .String "country_code" }}</li>
+                  </ul>
+                  <div class="nb-ip">{{ .String "ip" }}</div>
+                </div>
+              </li>
+              {{ end }}
+            </ul>
+
+    # ---------------- Center: Wide Column ----------------
+    - size: full
+      widgets:
+        - type: monitor
+          cache: 1m
+          title: storage
+          allow-insecure: true
+          sites:
+            - title: openlist
+              url: http://192.0.2.4:5244/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/openlist.svg
+            - title: minio
+              url: https://console.s3.lan.example.com/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/minio.svg
+
+        - type: monitor
+          cache: 1m
+          title: docker
+          allow-insecure: true
+          sites:
+            - title: portainer-lan
+              url: http://192.0.2.7:9000/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/portainer-alt.svg
+            - title: portainer-vps
+              url: http://198.51.100.1:9000/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/portainer-alt.svg
+
+        - type: monitor
+          cache: 1m
+          title: observability
+          allow-insecure: true
+          sites:
+            - title: grafana
+              url: http://192.0.2.7:7000/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/grafana.svg
+            - title: prometheus
+              url: http://192.0.2.7:9095/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/prometheus.svg
+
+        - type: monitor
+          cache: 1m
+          title: networks
+          allow-insecure: true
+          sites:
+            - title: frp-vps-1
+              url: http://198.51.100.1:7500/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/frp.svg
+            - title: frp-vps-2
+              url: http://198.51.100.2:7500/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/frp.svg
+            - title: sakurafrp
+              url: https://192.0.2.7:7102/
+              icon: https://example.com/sakura-frp.ico
+            - title: ddns-go
+              url: http://192.0.2.1:9876/login
+              icon: https://example.com/ddnsgo.ico
+            - title: haproxy
+              url: ${HAPROXY_MONITOR_URL}
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/haproxy.svg
+            - title: metacubexd
+              url: http://192.0.2.1:9090/ui/metacubexd/#
+              icon: https://example.com/metacubexd.svg
+
+        - type: monitor
+          cache: 1m
+          title: syncthing
+          allow-insecure: true
+          sites:
+            - title: syncthing-lan
+              url: http://192.0.2.6:8384/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/syncthing.svg
+            - title: syncthing-workstation
+              url: http://192.0.2.17:8384/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/syncthing.svg
+            - title: syncthing-vps
+              url: http://198.51.100.1:8384/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/syncthing.svg
+            - title: syncthing-client-1
+              url: http://192.0.2.14:8384/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/syncthing.svg
+            - title: syncthing-client-2
+              url: http://192.0.2.15:8384/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/syncthing.svg
+            - title: syncthing-client-3
+              url: http://192.0.2.16:8384/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/syncthing.svg
+
+    - size: small
+      widgets:
+        - type: dns-stats
+          title: Adguard Home
+          service: adguard
+          url: ${ADGUARD_URL}
+          username: ${ADGUARD_USERNAME}
+          password: ${ADGUARD_PASSWORD}
+
+        # ---- TrueNAS Pools ----
+        - type: custom-api
+          title: TrueNAS
+          cache: 1m
+          allow-insecure: true
+          subrequests:
+            dataset:
+              url: https://192.0.2.2/api/v2.0/pool/dataset
+              allow-insecure: true
+              headers:
+                Authorization: Bearer ${TRUENAS_API_KEY}
+            pool:
+              url: https://192.0.2.2/api/v2.0/pool
+              allow-insecure: true
+              headers:
+                Authorization: Bearer ${TRUENAS_API_KEY}
+          template: |
+            {{ $dataset := .Subrequest "dataset" }}
+            {{ $pool := .Subrequest "pool" }}
+            {{ range $dataset.JSON.Array "" }}
+              {{ if not (findMatch "/" (.String "name")) }}
+                {{ $used := .Float "used.parsed" }}
+                {{ $available := .Float "available.parsed" }}
+                {{ $total := add $used $available }}
+                {{ $totalTb := div (div (div (div $total 1024) 1024) 1024) 1024 | printf "%.1f" }}
+                {{ $percent := mul (div $used $total) 100 | printf "%.1f" }}
+                {{ $searchString := printf "..#.#(name==\"%s\").healthy|0" (.String "name") }}
+                {{ $healthy := $pool.JSON.Bool $searchString }}
+                <div style="margin-bottom: 1rem;">
+                  <div class="color-highlight size-h3">
+                    {{ if $healthy }}<span style="display:inline-block;background-color:var(--color-positive);width:12px;height:12px;border-radius:50%;"></span>
+                    {{ else }}<span style="display:inline-block;background-color:var(--color-negative);width:12px;height:12px;border-radius:50%;"></span>{{ end }}
+                    <span>{{ .String "name" }}</span>
+                  </div>
+                  <div class="progress-bar progress-bar-combined" style="position:relative;">
+                    <div class="flex justify" style="position:absolute;width:100%;justify-content:center;">
+                      <span>{{ .String "used.value" }} / {{ $totalTb }}T ({{ $percent }}%)</span>
+                    </div>
+                    <div class="progress-value" style="--percent: {{ $percent }}"></div>
+                  </div>
+                </div>
+              {{ end }}
+            {{ end }}
+
+        # ---- Proxmox VE Stats ----
+        - type: custom-api
+          title: Proxmox VE
+          cache: 1m
+          allow-insecure: true
+          subrequests:
+            resources:
+              url: https://192.0.2.3:8006/api2/json/cluster/resources
+              allow-insecure: true
+              headers:
+                Accept: application/json
+                Authorization: PVEAPIToken=${PROXMOXVE_KEY}
+          template: |
+            {{ $resp := .Subrequest "resources" }}
+            {{ $all := $resp.JSON.Array "data" }}
+            {{ $nodes_online := 0 }}{{ $nodes_total := 0 }}
+            {{ $lxc_running := 0 }}{{ $lxc_total := 0 }}
+            {{ $qemu_running := 0 }}{{ $qemu_total := 0 }}
+            {{ $storage_available := 0 }}{{ $storage_total := 0 }}
+            {{ range $all }}
+              {{ if eq (.String "type") "node" }}
+                {{ $nodes_total = add $nodes_total 1 }}
+                {{ if eq (.String "status") "online" }}{{ $nodes_online = add $nodes_online 1 }}{{ end }}
+              {{ else if eq (.String "type") "lxc" }}
+                {{ if ne (.Int "template") 1 }}{{ $lxc_total = add $lxc_total 1 }}{{ if eq (.String "status") "running" }}{{ $lxc_running = add $lxc_running 1 }}{{ end }}{{ end }}
+              {{ else if eq (.String "type") "qemu" }}
+                {{ if ne (.Int "template") 1 }}{{ $qemu_total = add $qemu_total 1 }}{{ if eq (.String "status") "running" }}{{ $qemu_running = add $qemu_running 1 }}{{ end }}{{ end }}
+              {{ else if eq (.String "type") "storage" }}
+                {{ $storage_total = add $storage_total 1 }}
+                {{ if eq (.String "status") "available" }}{{ $storage_available = add $storage_available 1 }}{{ end }}
+              {{ end }}
+            {{ end }}
+            <div class="flex flex-column gap-5">
+              <div class="flex justify-between text-center">
+                <div>
+                  <div class="color-highlight size-h3">{{ $nodes_online }}/{{ $nodes_total }}</div>
+                  <div class="size-h5 uppercase">Node</div>
+                </div>
+                <div>
+                  <div class="color-highlight size-h3">{{ $lxc_running }}/{{ $lxc_total }}</div>
+                  <div class="size-h5 uppercase">LXC</div>
+                </div>
+                <div>
+                  <div class="color-highlight size-h3">{{ $qemu_running }}/{{ $qemu_total }}</div>
+                  <div class="size-h5 uppercase">VM</div>
+                </div>
+                <div>
+                  <div class="color-highlight size-h3">{{ $storage_available }}/{{ $storage_total }}</div>
+                  <div class="size-h5 uppercase">Storage</div>
+                </div>
+              </div>
+            </div>
+
+        # ---- Syncthing ----
+        - type: custom-api
+          title: Syncthing
+          cache: 5m
+          url: http://192.0.2.6:8384/rest/system/config
+          headers:
+            X-API-Key: ${SYNCTHING_API_KEY}
+          template: |
+            {{ if ne .Response.StatusCode 200 }}
+              <p class="color-negative">API unreachable ({{ .Response.Status }})</p>
+            {{ else }}
+              {{ $folders := .JSON.Array "folders" }}
+              <ul class="list list-gap-10">
+                {{ range $f := $folders }}
+                  <li class="flex items-center gap-10">
+                    <span class="color-highlight">{{ $f.String "label" }}</span>
+                    <span class="size-sm color-subdue">{{ $f.String "id" }}</span>
+                  </li>
+                {{ end }}
+              </ul>
+            {{ end }}

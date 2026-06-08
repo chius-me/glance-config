@@ -1,0 +1,480 @@
+- name: home
+  columns:
+    - size: small
+      widgets:
+        - type: clock
+          hour-format: 24h
+          timezone: Asia/Shanghai
+
+        - type: weather
+          location: London # example city, replace with yours
+          units: metric
+          hour-format: 24h
+
+        - type: group
+          widgets:
+            - type: custom-api
+              title: TimeFly
+              body-type: string
+              skip-json-validation: true
+              cache: 1s
+              template: |
+                {{ $localTime := now }}
+                {{ $secondsPerDay := 86400 }}
+                {{ $elapsedSeconds := add (mul $localTime.Hour 3600) (mul $localTime.Minute 60) | add $localTime.Second }}
+                {{ $dayProgress := div (mul $elapsedSeconds 100.0) $secondsPerDay }}
+                {{ $gradient := "" }}
+                {{ if lt $dayProgress 10.0 }}
+                  {{ $gradient = "#70a1ff" }}
+                {{ else if lt $dayProgress 25.0 }}
+                  {{ $gradient = "#ff6b6b, #70a1ff" }}
+                {{ else if lt $dayProgress 50.0 }}
+                  {{ $gradient = "#ff6b6b, #f8e71c, #7ed6df" }}
+                {{ else }}
+                  {{ $gradient = "#ff6b6b, #f8e71c, #7ed6df, #70a1ff" }}
+                {{ end }}
+                <div style="text-align: center;">
+                  <div style="width: 100%; height: 12px; background: rgba(128, 128, 128, 0.15); border-radius: 10px; overflow: hidden;">
+                    <div style="height: 100%; width: {{ $dayProgress }}%; background: linear-gradient(90deg, {{ $gradient }});"></div>
+                  </div>
+                  <div class="size-h6 margin-top-6">{{ printf "%.2f" $dayProgress }}% of the day</div>
+                </div>
+            - type: custom-api
+              title: Month
+              body-type: string
+              skip-json-validation: true
+              cache: 1s
+              template: |
+                {{ $localTime := now }}
+                {{ $month := $localTime.Month }}
+                {{ $dayOfMonth := $localTime.Day }}
+                {{ $secondsToday := add (mul $localTime.Hour 3600) (mul $localTime.Minute 60) | add $localTime.Second }}
+                {{ $fractionOfDay := div $secondsToday 86400.0 }}
+                {{ $daysInMonth := 31 }}
+                {{ if eq $month 2 }}{{ $daysInMonth = 28 }}{{ end }}
+                {{ if or (eq $month 4) (eq $month 6) (eq $month 9) (eq $month 11) }}{{ $daysInMonth = 30 }}{{ end }}
+                {{ $daysElapsed := add (sub $dayOfMonth 1) $fractionOfDay }}
+                {{ $monthProgress := mul (div $daysElapsed $daysInMonth) 100.0 }}
+                {{ $gradient := "" }}
+                {{ if lt $monthProgress 10.0 }}
+                  {{ $gradient = "#70a1ff" }}
+                {{ else if lt $monthProgress 25.0 }}
+                  {{ $gradient = "#ff6b6b, #70a1ff" }}
+                {{ else if lt $monthProgress 50.0 }}
+                  {{ $gradient = "#ff6b6b, #f8e71c, #7ed6df" }}
+                {{ else }}
+                  {{ $gradient = "#ff6b6b, #f8e71c, #7ed6df, #70a1ff" }}
+                {{ end }}
+                <div style="text-align: center;">
+                  <div style="width: 100%; height: 12px; background: rgba(128, 128, 128, 0.15); border-radius: 10px; overflow: hidden;">
+                    <div style="height: 100%; width: {{ $monthProgress }}%; background: linear-gradient(90deg, {{ $gradient }});"></div>
+                  </div>
+                  <div class="size-h6 margin-top-6">{{ printf "%.2f" $monthProgress }}% of the month</div>
+                </div>
+            - type: custom-api
+              title: Year
+              body-type: string
+              skip-json-validation: true
+              cache: 1s
+              template: |
+                {{ $localTime := now }}
+                {{ $secondsToday := add (mul $localTime.Hour 3600) (mul $localTime.Minute 60) | add $localTime.Second }}
+                {{ $dayOfYear := $localTime.YearDay }}
+                {{ $secondsElapsed := add (mul (sub $dayOfYear 1) 86400) $secondsToday }}
+                {{ $totalSecondsInYear := mul 365 86400 }}
+                {{ $yearProgress := div (mul $secondsElapsed 100.0) $totalSecondsInYear }}
+                {{ $gradient := "" }}
+                {{ if lt $yearProgress 10.0 }}
+                  {{ $gradient = "#70a1ff" }}
+                {{ else if lt $yearProgress 25.0 }}
+                  {{ $gradient = "#ff6b6b, #70a1ff" }}
+                {{ else if lt $yearProgress 50.0 }}
+                  {{ $gradient = "#ff6b6b, #f8e71c, #7ed6df" }}
+                {{ else }}
+                  {{ $gradient = "#ff6b6b, #f8e71c, #7ed6df, #70a1ff" }}
+                {{ end }}
+                <div style="text-align: center;">
+                  <div style="width: 100%; height: 12px; background: rgba(128, 128, 128, 0.15); border-radius: 10px; overflow: hidden;">
+                    <div style="height: 100%; width: {{ $yearProgress }}%; background: linear-gradient(90deg, {{ $gradient }});"></div>
+                  </div>
+                  <div class="size-h6 margin-top-6">{{ printf "%.2f" $yearProgress }}% of the year</div>
+                </div>
+
+        - type: custom-api
+          title: Spotify
+          cache: 60s
+          url: http://ws.audioscrobbler.com/2.0/
+          parameters:
+            method: user.getRecentTracks
+            user: ${LASTFM_USERNAME}
+            api_key: ${LASTFM_API_KEY}
+            format: json
+            limit: 10
+          template: |
+            <ul class="list list-gap-10 collapsible-container" data-collapse-after="5">
+              {{ range .JSON.Array "recenttracks.track" }}
+                <li class="flex items-center gap-10">
+                  <div style="border-radius:5px;min-width:5rem;max-width:5rem;overflow:hidden;">
+                    <img src="{{ .String "image.2.#text" }}" style="width:100%;">
+                  </div>
+                  <div>
+                    <div class="color-positive size-h5">{{ .String "artist.#text" }}</div>
+                    <div class="size-h5">{{ .String "name" }}</div>
+                    <div class="size-h6">
+                      {{ if .String "@attr.nowplaying" }}
+                        <span class="color-positive">Now playing</span>
+                      {{ else }}
+                        <span class="color-subdue">{{ .String "date.#text" }}</span>
+                      {{ end }}
+                    </div>
+                  </div>
+                </li>
+              {{ end }}
+            </ul>
+
+    - size: full
+      widgets:
+        - type: search
+          autofocus: true
+          search-engine: google
+          new-tab: true
+          bangs:
+            - title: GitHub
+              shortcut: "gh"
+              url: https://github.com/search?q={QUERY}
+            - title: Bilibili
+              shortcut: "bi"
+              url: https://search.bilibili.com/all?keyword={QUERY}
+            - title: Reddit
+              shortcut: "r"
+              url: https://www.reddit.com/search/?q={QUERY}
+
+        - type: bookmarks
+          title: info
+          groups:
+            - title: email
+              links:
+                - title: outlook
+                  url: https://outlook.live.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/microsoft-outlook.svg
+                - title: gmail
+                  url: https://mail.google.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/gmail.svg
+                - title: proton
+                  url: https://mail.proton.me/
+                  icon: https://cdn.jsdelivr.net/gh/selfhst/icons/svg/proton.svg
+
+            - title: site
+              links:
+                - title: personal site
+                  url: https://example.com/
+                  icon: https://example.com/favicon.png
+                - title: blog
+                  url: https://blog.example.com/
+                  icon: https://example.com/blog.png
+                - title: status
+                  url: http://status.example.com/
+                  icon: https://example.com/status.png
+                - title: social
+                  url: https://social.example.com/@user
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/gotosocial.svg
+                - title: cv
+                  url: https://cv.example.com/cv.pdf
+                  icon: si:readdotcv
+
+        - type: bookmarks
+          groups:
+            - title: creation
+              links:
+                - title: feishu
+                  url: https://your-team.feishu.cn/next/messenger
+                  icon: https://p1-hera.feishucdn.com/tos-cn-i-jbbdkfciu3/1ec7129d900e442d8501d810efdaa369~tplv-jbbdkfciu3-image:0:0.image
+                - title: notion
+                  url: https://www.notion.so/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/notion.svg
+                - title: canva
+                  url: https://canva.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/canva.svg
+                - title: figma
+                  url: https://figma.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/figma.svg
+
+            - title: media
+              links:
+                - title: bilibili
+                  url: https://www.bilibili.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/bilibili.svg
+                - title: douyin
+                  url: https://www.douyin.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/tiktok.svg
+                - title: youtube
+                  url: https://youtube.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/youtube.svg
+                - title: pixiv
+                  url: https://pixiv.net/
+                  icon: https://cdn.jsdelivr.net/gh/selfhst/icons/svg/pixiv.svg
+
+            - title: social
+              links:
+                - title: telegram
+                  url: https://web.telegram.org/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/telegram.svg
+                - title: elk
+                  url: https://elk.zone/
+                  icon: https://cdn.jsdelivr.net/gh/selfhst/icons/svg/elk.svg
+                - title: bluesky
+                  url: https://bsky.app/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/bluesky.svg
+                - title: reddit
+                  url: https://www.reddit.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/reddit.svg
+                - title: discord
+                  url: https://discord.com/channels/@me
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/discord.svg
+                - title: whatsapp
+                  url: https://web.whatsapp.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/whatsapp.svg
+                - title: linkedin
+                  url: https://www.linkedin.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/linkedin.svg
+
+        - type: monitor
+          cache: 1m
+          title: note
+          sites:
+            - title: memos
+              url: https://memos.example.com/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/memos.svg
+            - title: outline
+              url: https://doc.lan.example.com/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/outline.svg
+            - title: excalidraw
+              url: http://192.0.2.7:5000/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/excalidraw.svg
+
+        - type: monitor
+          cache: 1m
+          title: tool
+          sites:
+            - title: eve-ng
+              url: https://192.0.2.21/
+              icon: https://example.com/eve-ng.png
+            - title: linkding
+              url: https://link.lan.example.com/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/linkding.svg
+            - title: vaultwarden
+              url: https://pwd.example.com/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/vaultwarden.svg
+            - title: reactive resume
+              url: https://resume.lan.example.com/auth/login
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/reactive-resume.svg
+            - title: mealie
+              url: http://192.0.2.7:9091/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/mealie.svg
+
+        - type: monitor
+          cache: 1m
+          title: house
+          sites:
+            - title: home-assistant
+              url: http://192.0.2.19:8123/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/home-assistant.svg
+            - title: home-assistant-2
+              url: http://192.0.2.19:8124/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/home-assistant-alt.svg
+            - title: traccar
+              url: http://192.0.2.7:8082/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/traccar.svg
+
+    - size: small
+      widgets:
+        - type: custom-api
+          title: Steam
+          cache: 1m
+          url: https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${STEAM_API_KEY}&steamids=${STEAM_USER_IDS}
+          template: |
+            <ul class="list list-gap-10 collapsible-container" data-collapse-after="5">
+              {{ $players := .JSON.Array "response.players" }}
+              {{ if gt (len $players) 0 }}
+                {{ range $players }}
+                  {{ $status := .Int "personastate" }}
+                  {{ $colorClass := "color-subdue" }}
+                  {{ $statusText := "Offline" }}
+                  {{ if eq $status 1 }}{{ $colorClass = "color-positive" }}{{ $statusText = "Online" }}
+                  {{ else if eq $status 2 }}{{ $colorClass = "color-highlight" }}{{ $statusText = "Busy" }}
+                  {{ else if eq $status 3 }}{{ $colorClass = "color-primary" }}{{ $statusText = "Away" }}
+                  {{ else if eq $status 4 }}{{ $colorClass = "color-primary" }}{{ $statusText = "Snooze" }}
+                  {{ else if eq $status 5 }}{{ $colorClass = "color-primary" }}{{ $statusText = "Looking to Trade" }}
+                  {{ else if eq $status 6 }}{{ $colorClass = "color-primary" }}{{ $statusText = "Looking to Play" }}
+                  {{ end }}
+                  <li class="flex gap-10 items-start">
+                    <a href="{{ .String "profileurl" }}" style="width:4.4rem;height:4.4rem;border:2px solid var(--color-text-subdue);padding:2px;border-radius:50%;flex-shrink:0;">
+                      <img style="aspect-ratio:1;border-radius:50%;width:100%;" src="{{ .String "avatarmedium" }}" loading="lazy">
+                    </a>
+                    <div>
+                      <a href="{{ .String "profileurl" }}" class="size-h3 block">{{ .String "personaname" }}</a>
+                      <span class="{{ $colorClass }}">
+                        {{ if .Exists "gameextrainfo" }}{{ .String "gameextrainfo" }}{{ else }}{{ $statusText }}{{ end }}
+                      </span>
+                    </div>
+                  </li>
+                {{ end }}
+              {{ else }}
+                <p class="color-negative">No player data found.</p>
+              {{ end }}
+            </ul>
+
+        - type: custom-api
+          title: Duolingo
+          cache: 1h
+          url: https://www.duolingo.com/2023-05-23/users/${DUO_USER_ID}?fields=id,name,username,learningLanguage,creationDate,totalXp,gemsConfig,hasPlus,xpGoal,streak,email,fromLanguage,currentCourseId,lastResurrectionTimestamp,courses
+          headers:
+            Authorization: Bearer ${DUO_JWT_TOKEN}
+          template: |
+            <ul class="list list-gap-14 collapsible-container">
+              <li class="separator margin-top-10 margin-bottom-10"></li>
+              <li class="flex items-center gap-12">
+                <div class="flex items-center justify-center shrink-0" style="width: 24px; height: 24px;">
+                  <svg width="20" height="20" viewBox="0 0 16 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6.77271 0.532617C7.336 -0.177539 8.414 -0.177539 8.97729 0.532616L14.0623 6.94342C15.1193 8.23421 15.75 9.86374 15.75 11.6351C15.75 15.8233 12.2242 19.2185 7.875 19.2185C3.52576 19.2185 0 15.8233 0 11.6351C0 11.3414 0.0173457 11.0515 0.0511046 10.7664L0.0333507 4.37841C0.0307386 3.43858 0.542464 2.74527 1.41725 2.89269C1.59157 2.92207 1.9601 3.0331 2.12522 3.12149L3.94611 4.09617L6.77271 0.532617Z" fill="#FF9600"/>
+                    <path d="M8.40677 8.24144C8.1299 7.86443 7.5667 7.86443 7.28982 8.24144L5.30202 10.9482C5.28343 10.9735 5.2689 11 5.25814 11.027C4.7842 11.5866 4.5 12.3011 4.5 13.0796C4.5 14.8745 6.01104 16.3296 7.875 16.3296C9.73896 16.3296 11.25 14.8745 11.25 13.0796C11.25 12.2008 10.8878 11.4035 10.2993 10.8185L8.40677 8.24144Z" fill="#FFC800"/>
+                  </svg>
+                </div>
+                <span class="color-highlight text-truncate block grow font-medium" style="line-height: 24px;">Streak</span>
+                <span class="font-bold text-large color-warning" style="line-height: 24px;">{{ .JSON.Int "streak" }} days</span>
+              </li>
+              <li class="flex items-center gap-12">
+                <div class="flex items-center justify-center shrink-0" style="width: 24px; height: 24px;">
+                  <svg width="20" height="20" viewBox="0 0 22 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M14.0367 2.67272C13.8379 0.718003 11.3282 0.0455378 10.1787 1.63898L0.717665 14.7538C-0.157342 15.9667 0.452676 17.6801 1.89732 18.0672L7.2794 19.5093L8.07445 27.3273C8.27323 29.282 10.7829 29.9545 11.9324 28.361L21.3935 15.2462C22.2685 14.0333 21.6585 12.3199 20.2138 11.9328L14.8317 10.4907L14.0367 2.67272Z" fill="#FFD900"/>
+                    <path d="M2.574 16.4882C2.08457 16.3561 2.03731 15.6803 2.50359 15.4813L6.24415 13.8853C6.58188 13.7412 6.96093 13.973 6.98654 14.3393L7.17226 16.9952C7.19787 17.3615 6.85477 17.6438 6.50027 17.5481L2.574 16.4882Z" fill="#F7C100"/>
+                    <path d="M19.717 13.2505C20.2064 13.3826 20.2537 14.0584 19.7874 14.2573L16.0469 15.8533C15.7091 15.9974 15.3301 15.7656 15.3045 15.3993L15.1188 12.7435C15.0931 12.3772 15.4362 12.0949 15.7907 12.1906L19.717 13.2505Z" fill="#FFEF8F"/>
+                  </svg>
+                </div>
+                <span class="color-highlight text-truncate block grow font-medium" style="line-height: 24px;">Total XP</span>
+                <span class="font-bold text-large" style="line-height: 24px;">{{ .JSON.Int "totalXp" }} XP</span>
+              </li>
+              <li class="flex items-center gap-12">
+                <div class="flex items-center justify-center shrink-0" style="width: 24px; height: 24px;">
+                  <svg width="20" height="20" viewBox="0 0 24 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3.12035 6.45972C1.80438 7.25391 1 8.67887 1 10.2159V19.8822C1 21.4192 1.80438 22.8442 3.12035 23.6384L9.59501 27.5458C10.9891 28.3872 12.7345 28.3872 14.1287 27.5459L20.6037 23.6384C21.9197 22.8442 22.7241 21.4192 22.7241 19.8821V10.216C22.7241 8.67889 21.9197 7.2539 20.6037 6.45972L14.1287 2.55221C12.7345 1.71089 10.9891 1.71091 9.59501 2.55226L3.12035 6.45972Z" fill="#1CB0F6" stroke="white" stroke-width="2"/>
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M10.2449 5.45314C10.9645 5.01112 11.8902 5.52889 11.8902 6.37339V9.53852C11.8902 9.91649 11.6926 10.267 11.3692 10.4626L8.42194 12.2455C8.05585 12.4669 7.59354 12.4514 7.24315 12.2058L4.85711 10.5338C4.22068 10.0878 4.24944 9.13584 4.91163 8.7291L10.2449 5.45314Z" fill="#DDF4FF"/>
+                  </svg>
+                </div>
+                <span class="color-highlight text-truncate block grow font-medium" style="line-height: 24px;">Gems</span>
+                <span class="font-bold color-info" style="line-height: 24px;">{{ .JSON.Int "gemsConfig.gems" }} Gems</span>
+              </li>
+              <li class="separator margin-top-10 margin-bottom-10"></li>
+              <li class="collapsible-item">
+                <details>
+                  <summary class="flex items-center gap-12 cursor-pointer">
+                    <span class="color-highlight text-truncate block grow font-medium">My Courses</span>
+                    <span class="text-muted">{{ .JSON.Array "courses" | len }} courses</span>
+                  </summary>
+                  <ul class="list list-gap-10 margin-top-14">
+                    {{ range .JSON.Array "courses" }}
+                      <li class="flex items-center gap-12 padding-left-24">
+                        <span class="text-truncate block grow">
+                          <span class="font-medium">
+                            {{ if .String "title" }}{{ .String "title" }}
+                            {{ else if eq (.String "subject") "math" }}Mathematics
+                            {{ else if eq (.String "subject") "music" }}Music Theory
+                            {{ else if eq (.String "subject") "chess" }}Chess
+                            {{ else }}{{ .String "subject" }}{{ end }}
+                          </span>
+                          <span class="text-muted text-small block">{{ .String "topic" }}</span>
+                        </span>
+                        <span class="text-right">
+                          <span class="font-bold">{{ .Int "xp" }}</span>
+                          <span class="text-muted text-small block">XP</span>
+                        </span>
+                      </li>
+                    {{ end }}
+                  </ul>
+                </details>
+              </li>
+            </ul>
+
+        - type: custom-api
+          title: Recently Played
+          cache: 1h
+          url: https://api.steampowered.com/IPlayerService/GetRecentlyPlayedGames/v0001/?key=${STEAM_API_KEY}&steamid=${STEAM_USER}&format=json
+          template: |
+            <div>
+              {{ if eq .Response.StatusCode 200 }}
+                {{ $games := .JSON.Array "response.games" }}
+                {{ if gt (len $games) 0 }}
+                  <ul class="list list-gap-10 collapsible-container" data-collapse-after="5">
+                    {{ range $games }}
+                      <li class="flex items-center">
+                        <a href="https://store.steampowered.com/app/{{ .Int "appid" }}" target="_blank">
+                          <img src="https://media.steampowered.com/steamcommunity/public/images/apps/{{ .Int "appid" }}/{{ .String "img_icon_url" }}.jpg" alt="{{ .String "name" }}" style="width:32px;border-radius:var(--border-radius);margin-right:10px;">
+                        </a>
+                        <div>
+                          <a href="https://store.steampowered.com/app/{{ .Int "appid" }}" class="size-base color-primary" target="_blank">{{ .String "name" }}</a>
+                          <br>
+                          <span class="size-h5 color-subdue">
+                            Last 2 weeks:
+                            {{ if gt (toFloat (.Int "playtime_2weeks")) 60.0 }}
+                              {{ printf "%.2f hrs" (div (toFloat (.Int "playtime_2weeks")) 60.0) }}
+                            {{ else }}{{ .Int "playtime_2weeks" }} mins{{ end }}
+                          </span>
+                        </div>
+                      </li>
+                    {{ end }}
+                  </ul>
+                {{ else }}
+                  <p class="color-negative">No recently played games found.</p>
+                {{ end }}
+              {{ else }}
+                <p class="color-negative">An unexpected error occurred.</p>
+              {{ end }}
+            </div>
+
+        - type: custom-api
+          title: Epic Games
+          cache: 1h
+          url: https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=zh-CN&country=CN&allowCountries=CN
+          template: |
+            <div>
+              {{ if eq .Response.StatusCode 200 }}
+                <div class="horizontal-cards-2">
+                  {{ range .JSON.Array "data.Catalog.searchStore.elements" }}
+                    {{ $price := .String "price.totalPrice.discountPrice" }}
+                    {{ $hasPromo := gt (len (.Array "promotions.promotionalOffers")) 0 }}
+                    {{ if and $hasPromo (eq $price "0") }}
+                      {{ $gamePage := .String "productSlug" }}
+                      {{ if gt (len (.Array "offerMappings")) 0 }}
+                        {{ $gamePage = .String "offerMappings.0.pageSlug" }}
+                      {{ end }}
+                      <a href="https://store.epicgames.com/zh-CN/p/{{ $gamePage }}" target="_blank" class="card">
+                        {{ $title := .String "title" }}
+                        {{ range .Array "keyImages" }}
+                          {{ if eq (.String "type") "OfferImageWide" }}
+                            <img src="{{ .String "url" }}" alt="{{ $title }}" style="width:100%;max-width:300px;height:150px;object-fit:cover;border-radius:var(--border-radius);">
+                          {{ end }}
+                        {{ end }}
+                        <div class="card-content">
+                          <span class="size-base color-primary">{{ $title }}</span><br>
+                          <span class="size-h5 color-subdue">
+                            {{ if $hasPromo }}
+                              {{ $promotions := .Array "promotions.promotionalOffers" }}
+                              {{ if gt (len $promotions) 0 }}
+                                {{ $firstPromo := index $promotions 0 }}
+                                {{ $offers := $firstPromo.Array "promotionalOffers" }}
+                                {{ if gt (len $offers) 0 }}
+                                  {{ $firstOffer := index $offers 0 }}
+                                  Free until {{ slice ($firstOffer.String "endDate") 0 10 }}
+                                {{ else }}Free this week!{{ end }}
+                              {{ else }}Free this week!{{ end }}
+                            {{ end }}
+                          </span>
+                        </div>
+                      </a>
+                    {{ end }}
+                  {{ end }}
+                </div>
+              {{ else }}
+                <p class="color-negative">Error fetching Epic Games data.</p>
+              {{ end }}
+            </div>

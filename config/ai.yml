@@ -1,0 +1,121 @@
+- name: ai
+  columns:
+    - size: small
+      widgets:
+        - type: clock
+          hour-format: 24h
+          timezone: Asia/Shanghai
+
+        - type: monitor
+          cache: 1m
+          title: selfhost
+          sites:
+            - title: open-webui
+              url: http://192.0.2.7:4000/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/open-webui-light.svg
+            - title: comfyui
+              url: http://192.0.2.17:8188/
+              icon: https://cdn.jsdelivr.net/gh/selfhst/icons/svg/comfyui.svg
+            - title: multica
+              url: https://multica.lan.example.com/
+              icon: https://example.com/multica.ai.svg
+            - title: deeptutor
+              url: http://192.0.2.7:3782/
+              icon: https://example.com/deeptutor.png
+            - title: astrbot
+              url: http://192.0.2.7:6185/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/astrbot.svg
+            - title: searxng
+              url: http://192.0.2.7:7888/
+              icon: https://cdn.jsdelivr.net/gh/selfhst/icons/svg/searxng.svg
+            - title: n8n
+              url: https://n8n.lan.example.com/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/n8n.svg
+
+    - size: full
+      widgets:
+        - type: bookmarks
+          title: LLM
+          groups:
+            - title: chat
+              links:
+                - title: chatgpt
+                  url: https://chat.openai.com/
+                  icon: https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/openai.svg
+                - title: gemini
+                  url: https://gemini.google.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/google-gemini.svg
+                - title: deepseek
+                  url: https://deepseek.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/deepseek.svg
+                - title: sesame
+                  url: https://app.sesame.com/
+                  icon: https://example.com/sesame.svg
+
+            - title: image
+              links:
+                - title: midjourney
+                  url: https://www.midjourney.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/midjourney.png
+                - title: jimeng
+                  url: https://jimeng.jianying.com/
+                  icon: https://example.com/jimeng.ico
+                - title: civitai
+                  url: https://civitai.com/
+                  icon: https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/civitai-color.svg
+
+            - title: audio
+              links:
+                - title: suno
+                  url: https://suno.com/
+                  icon: https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@latest/icons/suno.svg
+
+        - type: bookmarks
+          title: Repo & Tools
+          groups:
+            - title: model hub
+              links:
+                - title: huggingface
+                  url: https://huggingface.co/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/hugging-face.svg
+                - title: kaggle
+                  url: https://kaggle.com/
+                  icon: https://example.com/kaggle.ico
+
+            - title: tools
+              links:
+                - title: skill.sh
+                  url: https://skills.sh/
+                  icon: https://example.com/skill.sh.ico
+                - title: google labs
+                  url: https://labs.google/
+                  icon: https://example.com/google-labs.png
+                - title: google flow
+                  url: https://labs.google/fx/zh/tools/flow
+                  icon: https://example.com/google_flow.png
+
+    - size: small
+      widgets:
+        - type: custom-api
+          title: Astronomy Picture of the Day
+          cache: 1d
+          url: https://api.nasa.gov/planetary/apod?api_key=${NASA_API_KEY}
+          headers:
+            Accept: application/json
+          template: |
+            {{- if eq (.JSON.String "media_type") "image" -}}
+              <div style="display:flex; flex-direction:column; align-items:center; width:100%; padding:8px; box-sizing:border-box;">
+                <p class="color-primary" style="margin:0 0 8px; text-align:center;">
+                  <a href="https://apod.nasa.gov/apod/astropix.html" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: none;">
+                    {{ .JSON.String "title" }}
+                  </a>
+                </p>
+                <img src="{{ .JSON.String "url" }}" alt="{{ .JSON.String "title" }}" style="max-width:100%; height:auto; display:block; border-radius:4px;" />
+                <details style="width:100%; margin-top:12px;">
+                  <summary class="color-highlight size-h5" style="cursor:pointer;">Show Explanation</summary>
+                  <p class="color-highlight size-h5" style="margin-top:8px; line-height:1.4;">{{ .JSON.String "explanation" }}</p>
+                </details>
+              </div>
+            {{- else -}}
+              <p class="color-negative" style="text-align:center;">No image available today.</p>
+            {{- end }}

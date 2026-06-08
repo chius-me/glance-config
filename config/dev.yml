@@ -1,0 +1,238 @@
+- name: dev
+  columns:
+    # ---------------- Left: Narrow Column ----------------
+    - size: small
+      widgets:
+        - type: clock
+          hour-format: 24h
+          timezone: Asia/Shanghai
+
+        # ---- LeetCode Daily ----
+        - type: custom-api
+          title: LeetCode
+          cache: 6h
+          url: https://leetcode.com/graphql
+          method: POST
+          headers:
+            Accept: application/json
+          body-type: json
+          body:
+            query: |
+              query questionOfToday {
+                activeDailyCodingChallengeQuestion {
+                  link
+                  question {
+                    questionId
+                    title
+                    difficulty
+                    topicTags { name slug }
+                  }
+                }
+              }
+            operationName: questionOfToday
+          template: |
+            <style>
+              .lc-card {
+                max-width: 600px;
+                margin: 8px auto;
+              }
+              .lc-card .lc-link {
+                font-size: 1.6rem;
+                font-weight: 600;
+                line-height: 1.3;
+                text-decoration: none;
+              }
+              .lc-card .lc-link:hover {
+                text-decoration: underline;
+              }
+              .lc-card .lc-difficulty {
+                font-weight: 600;
+                font-size: 1.4rem;
+              }
+              .lc-card .lc-difficulty.Easy { color: var(--color-positive); }
+              .lc-card .lc-difficulty.Medium { color: #d97706; }
+              .lc-card .lc-difficulty.Hard { color: var(--color-negative); }
+              .lc-card .lc-topics {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin: 12px 0;
+              }
+              .lc-card .lc-tag {
+                background: var(--color-primary);
+                color: var(--color-background);
+                padding: 3px 12px;
+                border-radius: 16px;
+                font-size: 1.3rem;
+                font-weight: 500;
+                transition: transform 0.15s ease;
+              }
+              .lc-card .lc-tag:hover {
+                transform: scale(1.05);
+              }
+            </style>
+            <div class="lc-card">
+              <a class="lc-link color-primary-if-not-visited" href="https://leetcode.com{{ .JSON.String "data.activeDailyCodingChallengeQuestion.link" }}" target="_blank">
+                {{ .JSON.String "data.activeDailyCodingChallengeQuestion.question.questionId" }} - {{ .JSON.String "data.activeDailyCodingChallengeQuestion.question.title" }}
+              </a>
+              <div class="margin-top-10">
+                <span class="lc-difficulty {{ .JSON.String "data.activeDailyCodingChallengeQuestion.question.difficulty" }}">
+                  {{ .JSON.String "data.activeDailyCodingChallengeQuestion.question.difficulty" }}
+                </span>
+              </div>
+              <div class="lc-topics">
+                {{ if .JSON.Exists "data.activeDailyCodingChallengeQuestion.question.topicTags" }}
+                  {{ range .JSON.Array "data.activeDailyCodingChallengeQuestion.question.topicTags" }}
+                    <span class="lc-tag">{{ .String "name" }}</span>
+                  {{ end }}
+                {{ end }}
+              </div>
+            </div>
+
+        - type: bookmarks
+          groups:
+            - title: repo
+              links:
+                - title: github
+                  url: https://github.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/github.svg
+                - title: codeberg
+                  url: https://codeberg.org/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/codeberg.svg
+                - title: docker hub
+                  url: https://hub.docker.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/docker.svg
+
+    - size: full
+      widgets:
+        # ---- Trending GitHub Repos ----
+        - type: custom-api
+          title: GitHub Trending
+          cache: 24h
+          url: https://api.ossinsight.io/v1/trends/repos/?period=past_week&language=All
+          template: |
+            <ul class="list list-gap-10 collapsible-container" data-collapse-after="3">
+              {{ range .JSON.Array "data.rows"}}
+                <li>
+                  <a class="color-primary-if-not-visited" href="https://github.com/{{ .String "repo_name" }}">{{ .String "repo_name" }}</a>
+                  <ul class="list-horizontal-text">
+                      <li class="color-highlight">{{ .String "primary_language" }}</li>
+                      <li>{{ .Int "stars" }} ★</li>
+                      <li>{{ .Int "forks" }}⑂</li>
+                  </ul>
+                  <div class="size-sm color-subdue text-truncate">{{ .String "description" }}</div>
+                </li>
+              {{ end }}
+            </ul>
+
+        - type: monitor
+          cache: 1m
+          title: git
+          sites:
+            - title: forgejo
+              url: http://192.0.2.13:3000/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/forgejo.svg
+            - title: forgejo-mirror
+              url: http://192.0.2.7:4321/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/gitea-mirror.png
+            - title: argo-cd
+              url: https://192.0.2.22:32078/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/argo-cd.svg
+
+        - type: monitor
+          cache: 1m
+          title: tools
+          sites:
+            - title: authentik
+              url: https://auth.lan.example.com/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/authentik.svg
+            - title: dbeaver
+              url: http://192.0.2.7:8978/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/cloudbeaver.svg
+            - title: registry
+              url: https://registry.example.com/
+              icon: https://example.com/registry.ico
+            - title: napcat
+              url: http://192.0.2.7:6099/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/webp/napcat.webp
+            - title: it-tools
+              url: https://it.lan.example.com/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/it-tools.svg
+
+        - type: monitor
+          cache: 1m
+          title: project
+          sites:
+            - title: node-app
+              url: http://192.0.2.7:4200/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/nodejs.svg
+            - title: api-server
+              url: https://api.example.com/docs
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/fastapi.svg
+            - title: favicon
+              url: https://favicon.example.com/
+              icon: https://example.com/favicon.ico
+
+    - size: small
+      widgets:
+        - type: bookmarks
+          groups:
+            - title: cloud
+              links:
+                - title: cloudflare
+                  url: https://dash.cloudflare.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/cloudflare.svg
+                - title: aliyun
+                  url: https://home.console.aliyun.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/aliyun.svg
+                - title: google cloud
+                  url: https://cloud.google.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/google-cloud-platform.svg
+                - title: digital ocean
+                  url: https://cloud.digitalocean.com/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/digital-ocean.svg
+                - title: aws
+                  url: https://aws.amazon.com/console/
+                  icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/aws.svg
+
+        - type: custom-api
+          title: Cloudflare
+          css-class: "widget-type-cloudflared"
+          cache: 4h
+          url: https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel/${CLOUDFLARE_TUNNEL_ID}/configurations
+          headers:
+            Authorization: Bearer ${CLOUDFLARE_API_KEY}
+          template: |
+            {{ $domain_name := ".example.com" }}
+
+            <style>
+              .widget-type-cloudflared li {
+                margin-top: var(--list-half-gap);
+                border-top: 1px solid var(--color-separator);
+                padding-top: var(--list-half-gap);
+              }
+            </style>
+            <ul class="dynamic-columns list-gap-15 list-with-separator">
+            {{ range .JSON.Array "result.config.ingress" }}
+              {{ if (.String "hostname") }}
+              <li class="flex items-center gap-20">
+                  <div class="shrink-0">
+                      <img class="docker-container-icon" src="https://developers.cloudflare.com/logo.svg" alt="" loading="lazy">
+                  </div>
+                  <div class="min-width-0 grow">
+                    <a href='https://{{ .String "hostname" }}' class="color-highlight size-title-dynamic block text-truncate" target="_blank" rel="noreferrer">{{ .String "hostname" | trimSuffix $domain_name }}</a>
+                    {{ if (.String "service") }}
+                    <div class="flex items-center gap-10" style="margin-bottom: 5px">
+                      <div class="text-left">
+                        <img src="https://raw.githubusercontent.com/glanceapp/community-widgets/main/widgets/cloudflared-tunnels/link-down-right.png" style="width: auto; height: 20px; margin-left: 0px; margin-top: -4px;">
+                      </div>
+                      <div class="size-h6 flex-1 text-left">
+                        <a href='{{ .String "service" | replaceAll "localhost" "192.0.2.1" }}' target="_blank" rel="noreferrer">{{ .String "service" }}</a>
+                      </div>
+                    </div>
+                    {{ end }}
+                </div>
+              </li>
+              {{ end }}
+            </ul>
+            {{ end }}

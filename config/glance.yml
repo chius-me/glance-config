@@ -1,0 +1,23 @@
+auth:
+  secret-key:
+    "YOUR_BASE64_ENCODED_SECRET_KEY_HERE"
+  users:
+    YOUR_USERNAME:
+      password-hash: "YOUR_BCRYPT_PASSWORD_HASH_HERE"
+
+server:
+  assets-path: /app/assets
+  proxied: true
+
+theme:
+  light: true
+  background-color: 0 0 95
+  primary-color: 0 0 10
+  negative-color: 0 90 50
+
+pages:
+  - $include: home.yml
+  - $include: media.yml
+  - $include: infra.yml
+  - $include: ai.yml
+  - $include: dev.yml

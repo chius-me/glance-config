@@ -1,0 +1,681 @@
+- name: media
+  columns:
+    # ---------------- Left: Narrow Column ----------------
+    - size: small
+      widgets:
+        - type: clock
+          hour-format: 24h
+          timezone: Asia/Shanghai
+
+        # ---- Jellyfin Stats ----
+        - type: custom-api
+          title: Jellyfin Stats
+          cache: 5m
+          options:
+            url: ${JELLYFIN_URL}
+            key: ${JELLYFIN_KEY}
+          template: |
+            {{ $url := .Options.StringOr "url" "" }}
+            {{ $key := .Options.StringOr "key" "" }}
+            {{- if or (eq $url "") (eq $key "") -}}
+              <p>Error: The URL or API Key was not configured in the widget options.</p>
+            {{- else -}}
+              {{- $requestUrl := printf "%s/emby/Items/Counts?api_key=%s" $url $key -}}
+              {{- $jellyfinData := newRequest $requestUrl | getResponse -}}
+              {{- if eq $jellyfinData.Response.StatusCode 200 -}}
+                <div class="flex flex-column gap-5">
+                  <div class="flex justify-between text-center">
+                    <div>
+                      <div class="color-highlight size-h3">{{ $jellyfinData.JSON.Int "MovieCount" | formatNumber }}</div>
+                      <div class="size-h5 uppercase">Movies</div>
+                    </div>
+                    <div>
+                      <div class="color-highlight size-h3">{{ $jellyfinData.JSON.Int "SeriesCount" | formatNumber }}</div>
+                      <div class="size-h5 uppercase">TV Shows</div>
+                    </div>
+                    <div>
+                      <div class="color-highlight size-h3">{{ $jellyfinData.JSON.Int "EpisodeCount" | formatNumber }}</div>
+                      <div class="size-h5 uppercase">Episodes</div>
+                    </div>
+                    <div>
+                      <div class="color-highlight size-h3">{{ $jellyfinData.JSON.Int "SongCount" | formatNumber }}</div>
+                      <div class="size-h5 uppercase">Songs</div>
+                    </div>
+                  </div>
+                </div>
+              {{- else -}}
+                <p>Failed: {{ $jellyfinData.Response.Status }}</p>
+              {{- end -}}
+            {{- end -}}
+
+        # ---- Immich Stats ----
+        - type: custom-api
+          title: Immich stats
+          cache: 1d
+          url: ${IMMICH_URL}/api/server/statistics
+          headers:
+            x-api-key: ${IMMICH_API_KEY}
+            Accept: application/json
+          template: |
+            <div class="flex justify-between text-center">
+              <div>
+                  <div class="color-highlight size-h3">{{ .JSON.Int "photos" | formatNumber }}</div>
+                  <div class="size-h6">PHOTOS</div>
+              </div>
+              <div>
+                  <div class="color-highlight size-h3">{{ .JSON.Int "videos" | formatNumber }}</div>
+                  <div class="size-h6">VIDEOS</div>
+              </div>
+              <div>
+                  <div class="color-highlight size-h3">{{ div (.JSON.Int "usage" | toFloat) 1073741824 | toInt | formatNumber }}GB</div>
+                  <div class="size-h6">USAGE</div>
+              </div>
+            </div>
+
+        # ---- qBittorrent Stats ----
+        - type: custom-api
+          title: qBittorrent
+          cache: 10s
+          options:
+            view: "detailed"
+            mode: "upload"
+          subrequests:
+            transfer:
+              url: http://192.0.2.5:8080/api/v2/transfer/info
+            seeding:
+              url: http://192.0.2.5:8080/api/v2/torrents/info
+              parameters:
+                filter: seeding
+            leeching:
+              url: http://192.0.2.5:8080/api/v2/torrents/info
+              parameters:
+                filter: downloading
+          template: |
+            {{ $transfer := .Subrequest "transfer" }}
+            {{ $seeding := .Subrequest "seeding" }}
+            {{ $leeching := .Subrequest "leeching" }}
+
+            {{ if and (eq $transfer.Response.StatusCode 200) (eq $seeding.Response.StatusCode 200) (eq $leeching.Response.StatusCode 200) }}
+
+              {{ $isDetailed := eq (.Options.StringOr "view" "detailed") "detailed" }}
+              {{ $mode := .Options.StringOr "mode" "default" }}
+
+              {{ if $isDetailed }}
+              <!-- Detailed View -->
+              <div class="list" style="--list-gap: 15px;">
+                <div class="flex justify-between text-center">
+                  <div>
+                    {{ $dlSpeed := $transfer.JSON.Float "dl_info_speed" }}
+                    {{ if eq $mode "upload" }}
+                      <div class="color-highlight size-h3">{{ printf "%.1f MB/s" (div $dlSpeed 1000000.0) }}</div>
+                    {{ else }}
+                      {{ if lt $dlSpeed 1048576.0 }}
+                        <div class="color-highlight size-h3">{{ printf "%.0f KiB/s" (div $dlSpeed 1024.0) }}</div>
+                      {{ else }}
+                        <div class="color-highlight size-h3">{{ printf "%.1f MiB/s" (div $dlSpeed 1048576.0) }}</div>
+                      {{ end }}
+                    {{ end }}
+                    <div class="size-h6">DOWNLOADING</div>
+                  </div>
+
+                  {{ if eq $mode "upload" }}
+                  <div>
+                    {{ $ulSpeed := $transfer.JSON.Float "up_info_speed" }}
+                    <div class="color-highlight size-h3">{{ printf "%.1f MB/s" (div $ulSpeed 1000000.0) }}</div>
+                    <div class="size-h6">UPLOADING</div>
+                  </div>
+                  {{ end }}
+
+                  <div>
+                    <div class="color-highlight size-h3">{{ len ($seeding.JSON.Array "") }}</div>
+                    <div class="size-h6">SEEDING</div>
+                  </div>
+
+                  {{ if eq $mode "default" }}
+                  <div>
+                    <div class="color-highlight size-h3">{{ len ($leeching.JSON.Array "") }}</div>
+                    <div class="size-h6">LEECHING</div>
+                  </div>
+                  {{ end }}
+                </div>
+
+                <!-- Downloading list -->
+                {{ $downloadingTorrents := $leeching.JSON.Array "" }}
+                {{ if gt (len $downloadingTorrents) 0 }}
+                  <div style="margin-top: 15px;">
+                    <ul class="list collapsible-container" data-collapse-after="0" style="--list-gap: 15px;">
+                      {{ range $t := $downloadingTorrents }}
+                        {{ $state := $t.String "state" }}
+                        {{ $icon := "?" }}
+                        {{ if ge ($t.Int "completed") ($t.Int "size") }}{{ $icon = "✔" }}
+                        {{ else if eq $state "downloading" "forcedDL" }}{{ $icon = "↓" }}
+                        {{ else if eq $state "pausedDL" "stoppedDL" "pausedUP" "stalledDL" "stalledUP" "queuedDL" "queuedUP" }}{{ $icon = "❚❚" }}
+                        {{ else if eq $state "error" "missingFiles" }}{{ $icon = "!" }}
+                        {{ else if eq $state "checkingDL" "checkingUP" "allocating" }}{{ $icon = "…" }}
+                        {{ else if eq $state "checkingResumeData" }}{{ $icon = "⟳" }}
+                        {{ end }}
+
+                        <li class="flex items-center" style="gap: 10px;">
+                          <div class="size-h4" style="flex-shrink: 0;">{{ $icon }}</div>
+                          <div style="flex-grow: 1; min-width: 0;">
+                            <div class="text-truncate color-highlight">{{ $t.String "name" }}</div>
+                            <div title="{{ $t.Float "progress" | mul 100 | printf "%.1f" }}%" style="background: rgba(128, 128, 128, 0.2); border-radius: 5px; height: 6px; margin-top: 5px; overflow: hidden;">
+                              <div style="width: {{ $t.Float "progress" | mul 100 }}%; background-color: var(--color-positive); height: 100%; border-radius: 5px;"></div>
+                            </div>
+                          </div>
+                          <div style="flex-shrink: 0; text-align: right; width: 80px;">
+                            {{ $dlSpeed := $t.Float "dlspeed" }}
+                            <div class="size-sm color-paragraph">
+                              {{ if eq $mode "upload" }}
+                                {{ if lt $dlSpeed 1000.0 }}--{{ else }}{{ printf "%.1f MB/s" (div $dlSpeed 1000000.0) }}{{ end }}
+                              {{ else }}
+                                {{ if lt $dlSpeed 1024.0 }}--{{ else if lt $dlSpeed 1048576.0 }}{{ printf "%.0f KiB/s" (div $dlSpeed 1024.0) }}{{ else }}{{ printf "%.1f MiB/s" (div $dlSpeed 1048576.0) }}{{ end }}
+                              {{ end }}
+                            </div>
+                            {{ $eta := $t.Int "eta" }}
+                            <div class="size-sm color-paragraph">
+                              {{ if eq $eta 8640000 }}∞
+                              {{ else if gt $eta 3600 }}{{ printf "%dh %dm" (div $eta 3600) (mod (div $eta 60) 60) }}
+                              {{ else if gt $eta 0 }}{{ printf "%dm" (div $eta 60) }}
+                              {{ else }}--{{ end }}
+                            </div>
+                          </div>
+                        </li>
+                      {{ end }}
+                    </ul>
+                  </div>
+                {{ end }}
+
+                <!-- Seeding list -->
+                {{ if eq $mode "upload" }}
+                  {{ $seedingTorrents := $seeding.JSON.Array "" }}
+                  {{ if gt (len $seedingTorrents) 0 }}
+                    <div style="margin-top: 20px;">
+                      <ul class="list collapsible-container" data-collapse-after="0" style="--list-gap: 15px;">
+                        {{ range $t := $seedingTorrents }}
+                          {{ $state := $t.String "state" }}
+                          {{ $icon := "↑" }}
+                          {{ if eq $state "pausedUP" "stoppedUP" "stalledUP" "queuedUP" }}{{ $icon = "❚❚" }}
+                          {{ else if eq $state "error" "missingFiles" }}{{ $icon = "!" }}
+                          {{ else if eq $state "checkingUP" }}{{ $icon = "…" }}
+                          {{ else if eq $state "checkingResumeData" }}{{ $icon = "⟳" }}
+                          {{ end }}
+
+                          <li class="flex items-center" style="gap: 10px;">
+                            <div class="size-h4" style="flex-shrink: 0;">{{ $icon }}</div>
+                            <div style="flex-grow: 1; min-width: 0;">
+                              <div class="text-truncate color-highlight">{{ $t.String "name" }}</div>
+                              <div class="size-sm color-paragraph">
+                                Ratio: {{ printf "%.2f" ($t.Float "ratio") }} | 
+                                Size: {{ printf "%.1f GB" (div ($t.Float "size") 1073741824.0) }}
+                              </div>
+                            </div>
+                            <div style="flex-shrink: 0; text-align: right; width: 80px;">
+                              {{ $ulSpeed := $t.Float "upspeed" }}
+                              <div class="size-sm color-paragraph">
+                                {{ if lt $ulSpeed 1000.0 }}--{{ else }}{{ printf "%.1f MB/s" (div $ulSpeed 1000000.0) }}{{ end }}
+                              </div>
+                              <div class="size-sm color-paragraph">Upload</div>
+                            </div>
+                          </li>
+                        {{ end }}
+                      </ul>
+                    </div>
+                  {{ end }}
+                {{ end }}
+
+              </div>
+
+              {{ else }}
+              <!-- Basic View -->
+              <div class="flex justify-between text-center">
+                <div>
+                  {{ $dlSpeed := $transfer.JSON.Float "dl_info_speed" }}
+                  <div class="color-highlight size-h3">{{ printf "%.1f MB/s" (div $dlSpeed 1000000.0) }}</div>
+                  <div class="size-h6">DOWNLOADING</div>
+                </div>
+                {{ if eq $mode "upload" }}
+                <div>
+                  {{ $ulSpeed := $transfer.JSON.Float "up_info_speed" }}
+                  <div class="color-highlight size-h3">{{ printf "%.1f MB/s" (div $ulSpeed 1000000.0) }}</div>
+                  <div class="size-h6">UPLOADING</div>
+                </div>
+                {{ end }}
+                <div>
+                  <div class="color-highlight size-h3">{{ len ($seeding.JSON.Array "") }}</div>
+                  <div class="size-h6">SEEDING</div>
+                </div>
+                {{ if eq $mode "default" }}
+                <div>
+                  <div class="color-highlight size-h3">{{ len ($leeching.JSON.Array "") }}</div>
+                  <div class="size-h6">LEECHING</div>
+                </div>
+                {{ end }}
+              </div>
+              {{ end }}
+
+            {{ else }}
+              <div class="color-negative text-center">
+                <p>Error fetching qBittorrent data.</p>
+                <p class="size-sm">Check URL and authentication bypass settings.</p>
+              </div>
+            {{ end }}
+
+    # ---------------- Center: Wide Column ----------------
+    - size: full
+      widgets:
+        - type: custom-api
+          title: Jellyfin Next Up
+          frameless: true
+          cache: 5m
+          options:
+            base-url: ${JELLYFIN_URL}
+            api-key: ${JELLYFIN_KEY}
+            user-name: "jellyfin"
+            mode: "nextup"
+            item-count: "10"
+            small-column: false
+            show-thumbnail: true
+            progress-bar: true
+          template: |
+            {{ $baseURL := .Options.StringOr "base-url" "" }}
+            {{ $apiKey := .Options.StringOr "api-key" "" }}
+            {{ $userName := .Options.StringOr "user-name" "" }}
+            {{ $mode := .Options.StringOr "mode" "latest" }}
+            {{ $itemCount := .Options.StringOr "item-count" "10" }}
+            {{ $isSmallColumn:= .Options.BoolOr "small-column" false }}
+            {{ $showThumbnail := .Options.BoolOr "show-thumbnail" false }}
+            {{ $showProgressBar := .Options.BoolOr "progress-bar" true }}
+            {{ if or (eq $baseURL "") (eq $apiKey "") (eq $userName "") }}
+              <div class="color-negative">Jellyfin URL, API key or user name not set.</div>
+            {{ else }}
+              {{ $userID := "" }}
+              {{ $usersCall := newRequest (print $baseURL "/Users")
+                  | withParameter "api_key" $apiKey
+                  | withHeader "Accept" "application/json"
+                  | getResponse }}
+              {{ range $i, $user := $usersCall.JSON.Array "" }}
+                {{ if eq ($user.String "Name") $userName }}
+                  {{ $userID = $user.String "Id" }}
+                  {{ break }}
+                {{ end }}
+              {{ end }}
+              {{ if eq $userID "" }}
+                <div class="color-negative">User '{{ $userName }}' not found.</div>
+              {{ else }}
+                {{ $nextUpURL := print $baseURL "/Shows/NextUp" }}
+                {{ $nextUpCall := newRequest $nextUpURL
+                  | withParameter "api_key" $apiKey
+                  | withParameter "UserId" $userID
+                  | withParameter "Limit" $itemCount
+                  | withParameter "EnableResumable" "true"
+                  | withHeader "Accept" "application/json"
+                  | getResponse }}
+                {{ $items := $nextUpCall.JSON.Array "Items" }}
+                {{ if eq (len $items) 0 }}
+                  <p>No items found, start streaming something!</p>
+                {{ else }}
+                  <div class="carousel-container show-right-cutoff">
+                    <div class="cards-horizontal carousel-items-container">
+                      {{ range $n, $item := $items }}
+                        {{ $title := $item.String "Name" }}
+                        {{ $itemID := $item.String "Id" }}
+                        {{ $seriesTitle := $item.String "SeriesName" }}
+                        {{ $seriesID := $item.String "SeriesId" }}
+                        {{ $season := $item.Int "ParentIndexNumber" }}
+                        {{ $episode := $item.Int "IndexNumber" }}
+                        {{ $hasPlayPercentage := $item.Exists "UserData.PlayedPercentage" }}
+                        {{ $playPercentage := 0.0 }}
+                        {{ if $hasPlayPercentage }}
+                          {{ $playPercentage = $item.Float "UserData.PlayedPercentage" }}
+                        {{ end }}
+                        {{ $linkURL := print $baseURL "/web/#/details?id=" $itemID }}
+                        {{ $thumbURL := print $baseURL "/Items/" $itemID "/Images/Primary?api_key=" $apiKey }}
+                        <a class="card widget-content-frame" href="{{ $linkURL | safeURL }}">
+                          {{ if $showThumbnail }}
+                            <div style="position: relative;">
+                              <img src="{{ $thumbURL | safeURL }}"
+                                alt="{{ $title }} thumbnail"
+                                loading="lazy"
+                                class="media-server-thumbnail shrink-0"
+                                style="object-fit: fill; border-radius: var(--border-radius) var(--border-radius) 0 0; width: 100%; display: block;"
+                              />
+                              {{ if and ($showProgressBar) ($hasPlayPercentage) }}
+                                <div style="position: absolute; bottom: 8px; left: 8px; right: 8px; height: 6px; border-radius: var(--border-radius); overflow: hidden; background-color: rgba(255, 255, 255, 0.2);">
+                                  <div style="width: {{ printf "%.0f" $playPercentage }}%; height: 100%; border-radius: var(--border-radius) 0 0 var(--border-radius); background-color: var(--color-primary)"></div>
+                                </div>
+                              {{ end }}
+                            </div>
+                          {{ end }}
+                          <div class="grow padding-inline-widget margin-top-10 margin-bottom-10">
+                            <ul class="flex flex-column justify-evenly margin-bottom-3" style="height: 100%;">
+                              <ul class="list-horizontal-text flex-nowrap">
+                                <li class="color-primary shrink-0">S{{ $season }}E{{ $episode }}</li>
+                                <li class="text-truncate">{{ $seriesTitle }}</li>
+                              </ul>
+                              <li class="text-truncate">{{ $title }}</li>
+                              {{ if and ($showProgressBar) ($hasPlayPercentage) }}
+                                <div style="height: 4px; background: rgba(128,128,128,0.15); border-radius: 2px; overflow: hidden;">
+                                  <div style="width: {{ printf "%.0f" $playPercentage }}%; height: 100%; background-color: var(--color-primary);"></div>
+                                </div>
+                              {{ end }}
+                            </ul>
+                          </div>
+                        </a>
+                      {{ end }}
+                    </div>
+                  </div>
+                {{ end }}
+              {{ end }}
+            {{ end }}
+
+        # ---- Komga Recent Series ----
+        - type: custom-api
+          title: Manga
+          frameless: true
+          cache: 15m
+          options:
+            base-url: http://192.0.2.8:25600
+            thumbnail-url: http://192.0.2.7:8083
+            api-key: ${KOMGA_API_KEY}
+            library-id: ${LIBRARY_ID}
+            items: 10
+            mode: new
+          template: |
+            {{ $baseURL := .Options.StringOr "base-url" "" }}
+            {{ $thumbnailURL := .Options.StringOr "thumbnail-url" "" }}
+            {{ $apiKey := .Options.StringOr "api-key" "" }}
+            {{ $libraryId := .Options.StringOr "library-id" "" }}
+            {{ $numberOfItems := .Options.IntOr "items" 10 }}
+            {{ $mode := .Options.StringOr "mode" "new" }}
+            {{
+              $content := newRequest (concat $baseURL "/api/v1/series/" $mode "?library_id=" $libraryId)
+                | withHeader "X-API-Key" $apiKey
+                | getResponse
+            }}
+            {{ if or (eq $baseURL "") (eq $apiKey "") }}
+              <div class="color-negative">Komga URL or API key not set.</div>
+            {{ else }}
+              {{ if eq $content.Response.StatusCode 200 }}
+                <div class="cards-horizontal carousel-items-container">
+                  {{ $arr := $content.JSON.Array "content" }}
+                  {{ $shown := 0 }}
+                  {{ range $i, $_ := $arr }}
+                    {{ if lt $shown $numberOfItems }}
+                      {{ $el := index $arr $i }}
+                      <a class="card widget-content-frame"
+                         href="{{ $baseURL }}/series/{{ $el.String "id" }}"
+                         style="flex:0 0 25vh; min-width: 170px; display: flex; flex-direction: column; text-decoration: none; color: inherit;">
+                        <div style="position: relative;">
+                          <img src="{{ $thumbnailURL }}/api/v1/series/{{ $el.String "id" }}/thumbnail"
+                               alt="{{ $el.String "metadata.title" }}"
+                               loading="lazy"
+                               class="media-server-thumbnail shrink-0"
+                               style="width: 100%; height: 37vh; min-height: 250px; display: block; border-radius: var(--border-radius) var(--border-radius) 0 0; object-fit: cover;"
+                          />
+                        </div>
+                        <div class="grow padding-inline-widget margin-top-10 margin-bottom-10">
+                          <ul class="flex flex-column justify-evenly margin-bottom-3" style="height: 100%; gap: 4px;">
+                            <li class="text-truncate color-primary" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ $el.String "metadata.title" }}">
+                              {{ $el.String "metadata.title" }}
+                            </li>
+                            <li style="font-size: 0.85em; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                              Added: {{ $el.String "created" | parseTime "RFC3339" | formatTime "Jan 2, 2006" }}
+                            </li>
+                          </ul>
+                        </div>
+                      </a>
+                      {{ $shown = add $shown 1 }}
+                    {{ end }}
+                  {{ end }}
+                </div>
+              {{ else }}
+                <div class="color-negative">Failed to fetch items (status {{ $content.Response.StatusCode }})</div>
+              {{ end }}
+            {{ end }}
+
+        # ---- Komga Library (Fujimoto) ----
+        - type: custom-api
+          title: Fujimoto
+          frameless: true
+          cache: 15m
+          options:
+            base-url: http://192.0.2.8:25600
+            thumbnail-url: http://192.0.2.7:8083
+            api-key: ${KOMGA_API_KEY}
+            library-id: YOUR_LIBRARY_ID
+            items: 10
+            mode: new
+          template: |
+            {{ $baseURL := .Options.StringOr "base-url" "" }}
+            {{ $thumbnailURL := .Options.StringOr "thumbnail-url" "" }}
+            {{ $apiKey := .Options.StringOr "api-key" "" }}
+            {{ $libraryId := .Options.StringOr "library-id" "" }}
+            {{ $numberOfItems := .Options.IntOr "items" 10 }}
+            {{ $mode := .Options.StringOr "mode" "new" }}
+            {{
+              $content := newRequest (concat $baseURL "/api/v1/series/" $mode "?library_id=" $libraryId)
+                | withHeader "X-API-Key" $apiKey
+                | getResponse
+            }}
+            {{ if or (eq $baseURL "") (eq $apiKey "") }}
+              <div class="color-negative">Komga URL or API key not set.</div>
+            {{ else }}
+              {{ if eq $content.Response.StatusCode 200 }}
+                <div class="cards-horizontal carousel-items-container">
+                  {{ $arr := $content.JSON.Array "content" }}
+                  {{ $shown := 0 }}
+                  {{ range $i, $_ := $arr }}
+                    {{ if lt $shown $numberOfItems }}
+                      {{ $el := index $arr $i }}
+                      <a class="card widget-content-frame"
+                         href="{{ $baseURL }}/series/{{ $el.String "id" }}"
+                         style="flex:0 0 25vh; min-width: 170px; display: flex; flex-direction: column; text-decoration: none; color: inherit;">
+                        <div style="position: relative;">
+                          <img src="{{ $thumbnailURL }}/api/v1/series/{{ $el.String "id" }}/thumbnail"
+                               alt="{{ $el.String "metadata.title" }}"
+                               loading="lazy"
+                               class="media-server-thumbnail shrink-0"
+                               style="width: 100%; height: 37vh; min-height: 250px; display: block; border-radius: var(--border-radius) var(--border-radius) 0 0; object-fit: cover;"
+                           />
+                        </div>
+                        <div class="grow padding-inline-widget margin-top-10 margin-bottom-10">
+                          <ul class="flex flex-column justify-evenly margin-bottom-3" style="height: 100%; gap: 4px;">
+                            <li class="text-truncate color-primary" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ $el.String "metadata.title" }}">
+                              {{ $el.String "metadata.title" }}
+                            </li>
+                            <li style="font-size: 0.85em; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                              Added: {{ $el.String "created" | parseTime "RFC3339" | formatTime "Jan 2, 2006" }}
+                            </li>
+                          </ul>
+                        </div>
+                      </a>
+                      {{ $shown = add $shown 1 }}
+                    {{ end }}
+                  {{ end }}
+                </div>
+              {{ else }}
+                <div class="color-negative">Failed to fetch items (status {{ $content.Response.StatusCode }})</div>
+              {{ end }}
+            {{ end }}
+
+        # ---- Komga Library (Light Novel) ----
+        - type: custom-api
+          title: Light novel
+          frameless: true
+          cache: 15m
+          options:
+            base-url: http://192.0.2.8:25600
+            thumbnail-url: http://192.0.2.7:8083
+            api-key: ${KOMGA_API_KEY}
+            library-id: YOUR_LIBRARY_ID
+            items: 10
+            mode: new
+          template: |
+            {{ $baseURL := .Options.StringOr "base-url" "" }}
+            {{ $thumbnailURL := .Options.StringOr "thumbnail-url" "" }}
+            {{ $apiKey := .Options.StringOr "api-key" "" }}
+            {{ $libraryId := .Options.StringOr "library-id" "" }}
+            {{ $numberOfItems := .Options.IntOr "items" 10 }}
+            {{ $mode := .Options.StringOr "mode" "new" }}
+            {{
+              $content := newRequest (concat $baseURL "/api/v1/series/" $mode "?library_id=" $libraryId)
+                | withHeader "X-API-Key" $apiKey
+                | getResponse
+            }}
+            {{ if or (eq $baseURL "") (eq $apiKey "") }}
+              <div class="color-negative">Komga URL or API key not set.</div>
+            {{ else }}
+              {{ if eq $content.Response.StatusCode 200 }}
+                <div class="cards-horizontal carousel-items-container">
+                  {{ $arr := $content.JSON.Array "content" }}
+                  {{ $shown := 0 }}
+                  {{ range $i, $_ := $arr }}
+                    {{ if lt $shown $numberOfItems }}
+                      {{ $el := index $arr $i }}
+                      <a class="card widget-content-frame"
+                         href="{{ $baseURL }}/series/{{ $el.String "id" }}"
+                         style="flex:0 0 25vh; min-width: 170px; display: flex; flex-direction: column; text-decoration: none; color: inherit;">
+                        <div style="position: relative;">
+                          <img src="{{ $thumbnailURL }}/api/v1/series/{{ $el.String "id" }}/thumbnail"
+                               alt="{{ $el.String "metadata.title" }}"
+                               loading="lazy"
+                               class="media-server-thumbnail shrink-0"
+                               style="width: 100%; height: 37vh; min-height: 250px; display: block; border-radius: var(--border-radius) var(--border-radius) 0 0; object-fit: cover;"
+                           />
+                        </div>
+                        <div class="grow padding-inline-widget margin-top-10 margin-bottom-10">
+                          <ul class="flex flex-column justify-evenly margin-bottom-3" style="height: 100%; gap: 4px;">
+                            <li class="text-truncate color-primary" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ $el.String "metadata.title" }}">
+                              {{ $el.String "metadata.title" }}
+                            </li>
+                            <li style="font-size: 0.85em; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                              Added: {{ $el.String "created" | parseTime "RFC3339" | formatTime "Jan 2, 2006" }}
+                            </li>
+                          </ul>
+                        </div>
+                      </a>
+                      {{ $shown = add $shown 1 }}
+                    {{ end }}
+                  {{ end }}
+                </div>
+              {{ else }}
+                <div class="color-negative">Failed to fetch items (status {{ $content.Response.StatusCode }})</div>
+              {{ end }}
+            {{ end }}
+
+        # ---- Komga Library (Example) ----
+        - type: custom-api
+          title: Example Library
+          frameless: true
+          cache: 15m
+          options:
+            base-url: http://192.0.2.8:25600
+            thumbnail-url: http://192.0.2.7:8083
+            api-key: ${KOMGA_API_KEY}
+            library-id: YOUR_LIBRARY_ID
+            items: 10
+            mode: new
+          template: |
+            {{ $baseURL := .Options.StringOr "base-url" "" }}
+            {{ $thumbnailURL := .Options.StringOr "thumbnail-url" "" }}
+            {{ $apiKey := .Options.StringOr "api-key" "" }}
+            {{ $libraryId := .Options.StringOr "library-id" "" }}
+            {{ $numberOfItems := .Options.IntOr "items" 10 }}
+            {{ $mode := .Options.StringOr "mode" "new" }}
+            {{
+              $content := newRequest (concat $baseURL "/api/v1/series/" $mode "?library_id=" $libraryId)
+                | withHeader "X-API-Key" $apiKey
+                | getResponse
+            }}
+            {{ if or (eq $baseURL "") (eq $apiKey "") }}
+              <div class="color-negative">Komga URL or API key not set.</div>
+            {{ else }}
+              {{ if eq $content.Response.StatusCode 200 }}
+                <div class="cards-horizontal carousel-items-container">
+                  {{ $arr := $content.JSON.Array "content" }}
+                  {{ $shown := 0 }}
+                  {{ range $i, $_ := $arr }}
+                    {{ if lt $shown $numberOfItems }}
+                      {{ $el := index $arr $i }}
+                      <a class="card widget-content-frame"
+                         href="{{ $baseURL }}/series/{{ $el.String "id" }}"
+                         style="flex:0 0 25vh; min-width: 170px; display: flex; flex-direction: column; text-decoration: none; color: inherit;">
+                        <div style="position: relative;">
+                          <img src="{{ $thumbnailURL }}/api/v1/series/{{ $el.String "id" }}/thumbnail"
+                               alt="{{ $el.String "metadata.title" }}"
+                               loading="lazy"
+                               class="media-server-thumbnail shrink-0"
+                               style="width: 100%; height: 37vh; min-height: 250px; display: block; border-radius: var(--border-radius) var(--border-radius) 0 0; object-fit: cover;"
+                           />
+                        </div>
+                        <div class="grow padding-inline-widget margin-top-10 margin-bottom-10">
+                          <ul class="flex flex-column justify-evenly margin-bottom-3" style="height: 100%; gap: 4px;">
+                            <li class="text-truncate color-primary" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ $el.String "metadata.title" }}">
+                              {{ $el.String "metadata.title" }}
+                            </li>
+                            <li style="font-size: 0.85em; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                              Added: {{ $el.String "created" | parseTime "RFC3339" | formatTime "Jan 2, 2006" }}
+                            </li>
+                          </ul>
+                        </div>
+                      </a>
+                      {{ $shown = add $shown 1 }}
+                    {{ end }}
+                  {{ end }}
+                </div>
+              {{ else }}
+                <div class="color-negative">Failed to fetch items (status {{ $content.Response.StatusCode }})</div>
+              {{ end }}
+            {{ end }}
+
+    - size: small
+      widgets:
+        - type: monitor
+          cache: 1m
+          title: download
+          sites:
+            - title: qbittorrent
+              url: http://192.0.2.5:8080/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/qbittorrent.svg
+            - title: metube
+              url: http://192.0.2.8:8082/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/metube.svg
+        - type: monitor
+          cache: 1m
+          title: media
+          sites:
+            - title: jellyfin
+              url: http://192.0.2.12:8096/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/jellyfin.svg
+            - title: fn tv
+              url: https://192.0.2.18:5667/v
+              icon: https://cdn.jsdelivr.net/gh/selfhst/icons/png/fnos-media.png
+            - title: immich
+              url: http://192.0.2.9:2283/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/immich.svg
+            - title: photoprism
+              url: http://192.0.2.8:2342/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/photoprism.svg
+            - title: navidrome
+              url: http://192.0.2.8:4533/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/navidrome.svg
+            - title: komga
+              url: http://192.0.2.8:25600/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/komga.svg
+            - title: kiwix
+              url: http://192.0.2.8:8081/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/kiwix.svg
+        - type: monitor
+          cache: 1m
+          title: bilibili
+          sites:
+            - title: antuobangumi
+              url: http://192.0.2.8:7892/
+              icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/autobangumi.svg
+            - title: bili-recorder
+              url: http://your-bili-recorder-host:2356/
+              icon: https://example.com/bili-recorder.ico
+            - title: bili-sync
+              url: http://192.0.2.8:12345/
+              icon: https://example.com/bili-sync.png

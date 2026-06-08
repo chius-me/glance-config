@@ -1,0 +1,5 @@
+:8083 {
+    reverse_proxy YOUR_KOMGA_HOST:25600 {
+        header_up X-API-Key YOUR_KOMGA_API_KEY
+    }
+}
